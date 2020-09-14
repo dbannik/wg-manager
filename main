@@ -118,7 +118,7 @@ fi
 
 if [ "$action" == 'init' ]; then
   grep "^interface:" "$wgList" >/dev/null 2>&1 && exit
-  init "$arg"
+  init "$arg" "${3:-$(curl -s 2ip.ru)}"
 fi
 
 if [ "$action" == 'add' ]; then
