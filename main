@@ -91,9 +91,19 @@ function enable() {
 }
 
 function sync() {
-  getConfig >/etc/wireguard/wg0.conf && wg-quick up wg0
+  getConfig > /etc/wireguard/wg0.conf
   wg syncconf wg0 <(wg-quick strip wg0)
 }
+
+function start() {
+  getConfig > /etc/wireguard/wg0.conf
+  wg-quick up wg0
+}
+
+function stop() {
+  wg-quick down wg0
+}
+
 
 action="$1"
 arg="$2"
@@ -139,4 +149,17 @@ fi
 
 if [ "$action" == 'sync' ]; then
   sync
+fi
+
+if [ "$action" == 'start' ]; then
+  start
+fi
+
+if [ "$action" == 'stop' ]; then
+  stop
+fi
+
+if [ "$action" == 'restart' ]; then
+  stop
+  start
 fi
