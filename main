@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 
+set -e
+dir=$(dirname "$(readlink -f "$0")")
+
+action="$1"
+arg="$2"
+wgList="${dir}/db.list"
+templateHostInterface="${dir}/template/interface.conf.template"
+templateHostPeer="${dir}/template/peer.conf.template"
+templateClientInterface="${dir}/template/client.interface.conf.template"
+templateClientPeer="${dir}/template/client.peer.conf.template"
+
+function check() {
+  hash wg wg-quick curl || exit 1
+}
+
 function dec2ip() {
   local ip dec=$@
   for e in {3..0}; do
@@ -11,10 +26,10 @@ function dec2ip() {
   printf '%s\n' "$ip"
 }
 
-function ip2dec () {
-    local a b c d ip=$@
-    IFS=. read -r a b c d <<< "$ip"
-    printf '%d\n' "$((a * 256 ** 3 + b * 256 ** 2 + c * 256 + d))"
+function ip2dec() {
+  local a b c d ip=$@
+  IFS=. read -r a b c d <<<"$ip"
+  printf '%d\n' "$((a * 256 ** 3 + b * 256 ** 2 + c * 256 + d))"
 }
 
 function getConfig() {
@@ -32,8 +47,7 @@ function getConfig() {
 function nextIp() {
   local decIp
   decIp=$(
-    while IFS=":" read -r type endpoint address publicKey privateKey;
-    do
+    while IFS=":" read -r type endpoint address publicKey privateKey; do
       ip2dec "${address%/*}"
     done <"$wgList" | sort -n | tail -n 1
   )
@@ -82,21 +96,21 @@ function init() {
 
 function disable() {
   local client=$1
-  sed -i "s/^peer:$client/#peer:$client/" "$wgList"
+  sed -i "s/^peer:$client:/#peer:$client:/" "$wgList"
 }
 
 function enable() {
   local client=$1
-  sed -i "s/#peer:$client/peer:$client/" "$wgList"
+  sed -i "s/#peer:$client:/peer:$client:/" "$wgList"
 }
 
 function sync() {
-  getConfig > /etc/wireguard/wg0.conf
+  getConfig >/etc/wireguard/wg0.conf
   wg syncconf wg0 <(wg-quick strip wg0)
 }
 
 function start() {
-  getConfig > /etc/wireguard/wg0.conf
+  getConfig >/etc/wireguard/wg0.conf
   wg-quick up wg0
 }
 
@@ -104,21 +118,22 @@ function stop() {
   wg-quick down wg0
 }
 
+function list() {
+  while IFS=":" read -r type endpoint address publicKey privateKey; do
+    if [ "$type" != 'interface' ]; then
+      echo "$endpoint $address $(case $type in "peer") echo "enabled" ;; "#peer") echo "disabled" ;; esac)"
+    fi
+  done <"$wgList"
+}
 
-action="$1"
-arg="$2"
-wgList="wgList"
-templateHostInterface='template/interface.conf.template'
-templateHostPeer='template/peer.conf.template'
-templateClientInterface='template/client.interface.conf.template'
-templateClientPeer='template/client.peer.conf.template'
+check
 
 if [ "$action" == 'config' ]; then
   getConfig
 fi
 
 if [ "$action" == 'client' ]; then
-  grep "^peer:$arg:" "$wgList" >/dev/null || exit
+  grep "^peer:$arg:" "$wgList" >/dev/null || (echo "ERROR: peer: ${arg} already exists." >/dev/stderr && exit 1)
   getClientConfig "$arg"
 fi
 
@@ -127,24 +142,25 @@ if [ "$action" == 'remove' ]; then
 fi
 
 if [ "$action" == 'init' ]; then
-  grep "^interface:" "$wgList" >/dev/null 2>&1 && exit
+  grep "^interface:" "$wgList" >/dev/null 2>&1 && (echo "ERROR: interface already exists." >/dev/stderr && exit 1)
   init "$arg" "${3:-$(curl -s 2ip.ru)}"
 fi
 
 if [ "$action" == 'add' ]; then
-  grep ":$arg:" "$wgList" >/dev/null && exit
+  grep ":$arg:" "$wgList" >/dev/null && (echo "ERROR: peer: ${arg} already exists." >/dev/stderr && exit 1)
   add "$arg" >>"$wgList"
   getClientConfig "$arg"
 fi
 
 if [ "$action" == 'disable' ]; then
-  grep "^peer:$arg" "$wgList" >/dev/null 2>&1 || exit
-  disable "$arg"
+  grep "#peer:$arg:" "$wgList" >/dev/null 2>&1 && (echo "ERROR: peer: ${arg} is disabled." >/dev/stderr && exit 1)
+  grep "^peer:$arg:" "$wgList" >/dev/null 2>&1 || (echo "ERROR: peer: ${arg} does not exist." >/dev/stderr && exit 1)
+  disable "$arg" && echo "peer: ${arg} disabled."
 fi
 
 if [ "$action" == 'enable' ]; then
-  grep "^#peer:$arg" "$wgList" >/dev/null 2>&1 || exit
-  enable "$arg"
+  grep "^#peer:$arg:" "$wgList" >/dev/null 2>&1 || (echo "ERROR: peer: ${arg} does not exist." >/dev/stderr && exit 1)
+  enable "$arg" && echo "peer: ${arg} enabled."
 fi
 
 if [ "$action" == 'sync' ]; then
@@ -162,4 +178,8 @@ fi
 if [ "$action" == 'restart' ]; then
   stop
   start
+fi
+
+if [ "$action" == 'list' ]; then
+  list
 fi
