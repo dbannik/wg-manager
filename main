@@ -12,7 +12,7 @@ templateClientInterface="${dir}/template/client.interface.conf.template"
 templateClientPeer="${dir}/template/client.peer.conf.template"
 
 function check() {
-  hash wg wg-quick curl || exit 1
+  hash wg wg-quick curl qrencode || exit 1
 }
 
 function dec2ip() {
@@ -126,6 +126,14 @@ function list() {
   done <"$wgList"
 }
 
+function getClientQR() {
+  local client
+  client=$1
+  exec 3< <(getClientConfig "$client")
+
+  qrencode -t ansiutf8 <&3
+}
+
 check
 
 if [ "$action" == 'config' ]; then
@@ -182,4 +190,8 @@ fi
 
 if [ "$action" == 'list' ]; then
   list
+fi
+
+if [ "$action" == 'qr' ]; then
+  getClientQR "$arg"
 fi
