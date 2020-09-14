@@ -1,0 +1,4 @@
+# ${endpoint}
+[Peer]
+PublicKey = ${publicKey}
+AllowedIPs = ${address}

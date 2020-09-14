@@ -1,0 +1,5 @@
+[Peer]
+PublicKey = ${publicKey}
+Endpoint = ${endpoint}:51820
+AllowedIPs = ${allowedIPs}
+PersistentKeepalive = 25

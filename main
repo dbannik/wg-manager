@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+
+function dec2ip() {
+  local ip dec=$@
+  for e in {3..0}; do
+    ((octet = dec / (256 ** e)))
+    ((dec -= octet * 256 ** e))
+    ip+=$delim$octet
+    delim=.
+  done
+  printf '%s\n' "$ip"
+}
+
+function ip2dec () {
+    local a b c d ip=$@
+    IFS=. read -r a b c d <<< "$ip"
+    printf '%d\n' "$((a * 256 ** 3 + b * 256 ** 2 + c * 256 + d))"
+}
+
+function getConfig() {
+  while IFS=":" read -r type endpoint address publicKey privateKey; do
+    if [ "$type" == 'interface' ]; then
+      eval "printf \"$(<"$templateHostInterface")\n\""
+    fi
+
+    if [ "$type" == 'peer' ]; then
+      eval "printf \"\n$(<"$templateHostPeer")\n\""
+    fi
+  done <"$wgList"
+}
+
+function nextIp() {
+  local decIp
+  decIp=$(
+    while IFS=":" read -r type endpoint address publicKey privateKey;
+    do
+      ip2dec "${address%/*}"
+    done <"$wgList" | sort -n | tail -n 1
+  )
+  dec2ip $(("$decIp" + 1))
+}
+
+function add() {
+  local privateKey publicKey type endpoint address
+
+  privateKey=$(wg genkey)
+  publicKey=$(echo "$privateKey" | wg pubkey)
+  type='peer'
+  endpoint=$1
+  address="$(nextIp)"
+
+  echo "$type:$endpoint:$address/32:$publicKey:$privateKey"
+}
+
+getClientConfig() {
+  local client="$1" allowedIPs
+
+  IFS=":" read -r type endpoint address publicKey privateKey <<<$(grep "^peer:$client:" "$wgList")
+  eval "printf \"$(<"$templateClientInterface")\n\""
+
+  IFS=":" read -r type endpoint address publicKey privateKey <<<$(grep "^interface:" "$wgList")
+  allowedIPs=${address/.1\//.0\/}
+  eval "printf \"\n$(<"$templateClientPeer")\n\""
+}
+
+function remove() {
+  local client="$1"
+  sed -i "/^peer:$client:/d" "$wgList"
+}
+
+function init() {
+  local privateKey publicKey type endpoint address
+
+  privateKey=$(wg genkey)
+  publicKey=$(echo "$privateKey" | wg pubkey)
+  type='interface'
+  endpoint="$2"
+  address="$1/24"
+
+  echo "$type:$endpoint:$address:$publicKey:$privateKey" >>"$wgList"
+}
+
+function disable() {
+  local client=$1
+  sed -i "s/^peer:$client/#peer:$client/" "$wgList"
+}
+
+function enable() {
+  local client=$1
+  sed -i "s/#peer:$client/peer:$client/" "$wgList"
+}
+
+function sync() {
+  getConfig >/etc/wireguard/wg0.conf && wg-quick up wg0
+  wg syncconf wg0 <(wg-quick strip wg0)
+}
+
+action="$1"
+arg="$2"
+wgList="wgList"
+templateHostInterface='template/interface.conf.template'
+templateHostPeer='template/peer.conf.template'
+templateClientInterface='template/client.interface.conf.template'
+templateClientPeer='template/client.peer.conf.template'
+
+if [ "$action" == 'config' ]; then
+  getConfig
+fi
+
+if [ "$action" == 'client' ]; then
+  grep "^peer:$arg:" "$wgList" >/dev/null || exit
+  getClientConfig "$arg"
+fi
+
+if [ "$action" == 'remove' ]; then
+  remove "$arg"
+fi
+
+if [ "$action" == 'init' ]; then
+  grep "^interface:" "$wgList" >/dev/null 2>&1 && exit
+  init "$arg"
+fi
+
+if [ "$action" == 'add' ]; then
+  grep ":$arg:" "$wgList" >/dev/null && exit
+  add "$arg" >>"$wgList"
+  getClientConfig "$arg"
+fi
+
+if [ "$action" == 'disable' ]; then
+  grep "^peer:$arg" "$wgList" >/dev/null 2>&1 || exit
+  disable "$arg"
+fi
+
+if [ "$action" == 'enable' ]; then
+  grep "^#peer:$arg" "$wgList" >/dev/null 2>&1 || exit
+  enable "$arg"
+fi
+
+if [ "$action" == 'sync' ]; then
+  sync
+fi
