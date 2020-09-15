@@ -1,1 +1,3 @@
 db.list
+.env.local
+template/custom

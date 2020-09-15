@@ -5,11 +5,9 @@ dir=$(dirname "$(readlink -f "$0")")
 
 action="$1"
 arg="$2"
-wgList="${dir}/db.list"
-templateHostInterface="${dir}/template/interface.conf.template"
-templateHostPeer="${dir}/template/peer.conf.template"
-templateClientInterface="${dir}/template/client.interface.conf.template"
-templateClientPeer="${dir}/template/client.peer.conf.template"
+
+. "${dir}"/.env
+test -f "${dir}"/.env.local && . "${dir}"/.env.local
 
 function check() {
   hash wg wg-quick curl qrencode || exit 1
