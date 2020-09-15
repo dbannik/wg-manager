@@ -1,5 +1,5 @@
 [Peer]
 PublicKey = ${publicKey}
-Endpoint = ${endpoint}:51820
+Endpoint = ${endpoint}:${interfacePort}
 AllowedIPs = ${allowedIPs}
 PersistentKeepalive = 25

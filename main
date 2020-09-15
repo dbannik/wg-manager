@@ -103,17 +103,17 @@ function enable() {
 }
 
 function sync() {
-  getConfig >/etc/wireguard/wg0.conf
-  wg syncconf wg0 <(wg-quick strip wg0)
+  getConfig >/etc/wireguard/"$wgInterface".conf
+  wg syncconf "$wgInterface" <(wg-quick strip "$wgInterface")
 }
 
 function start() {
-  getConfig >/etc/wireguard/wg0.conf
-  wg-quick up wg0
+  getConfig >/etc/wireguard/"$wgInterface".conf
+  wg-quick up "$wgInterface"
 }
 
 function stop() {
-  wg-quick down wg0
+  wg-quick down "$wgInterface"
 }
 
 function list() {
